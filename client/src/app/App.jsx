@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
-import TopBar from './TopBar';
-import HomeScreen from './HomeScreen';
-import LobbyScreen from './LobbyScreen';
-import GameScreen from './GameScreen';
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
-const COLORS = ['#252525', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff', '#854d0e', '#64748b'];
-const initialSettings = { maxPlayers: 8, rounds: 3, drawTime: 80, wordCount: 3, hints: 2, category: 'All' };
+import TopBar from '../components/layout/TopBar';
+import GameScreen from '../features/game/GameScreen';
+import useCanvasDrawing from '../features/game/hooks/useCanvasDrawing';
+import HomeScreen from '../features/home/HomeScreen';
+import LobbyScreen from '../features/lobby/LobbyScreen';
+import { COLORS, initialSettings } from './constants';
+import { createSocket } from '../services/socket';
 
 function App() {
-  const socket = useMemo(() => io(SERVER_URL, { autoConnect: true, transports: ['websocket', 'polling'] }), []);
+  const socket = useMemo(createSocket, []);
   const [connected, setConnected] = useState(false);
   const [screen, setScreen] = useState('home');
   const [name, setName] = useState('');
@@ -28,17 +26,17 @@ function App() {
   const [eraser, setEraser] = useState(false);
   const [tool, setTool] = useState('pen');
 
-  const canvasRef = useRef(null);
-  const canvasStrokes = useRef([]);
-  const drawing = useRef(false);
-  const lastPoint = useRef(null);
   const chatEnd = useRef(null);
-  const localStroke = useRef(null);
-  const roomRef = useRef(null);
-  const gameRef = useRef(null);
-
-  useEffect(() => { roomRef.current = room; }, [room]);
-  useEffect(() => { gameRef.current = game; }, [game]);
+  const {
+    canvasRef,
+    clearCanvas,
+    handleDrawData,
+    pointerDown,
+    pointerMove,
+    pointerUp,
+    redrawStrokes,
+    undo,
+  } = useCanvasDrawing({ socket, game, color, brushSize, eraser });
 
   useEffect(() => {
     socket.on('connect', () => setConnected(true));
@@ -81,18 +79,10 @@ function App() {
       }
     });
     socket.on('app_error', (data) => setNotice(data.message));
-    socket.on('draw_data', (data) => {
-      if (data.action === 'start') {
-        if (!canvasStrokes.current.some((s) => s.id === data.stroke.id)) {
-          canvasStrokes.current.push(data.stroke);
-        }
-        drawStroke(data.stroke);
-      } else if (data.action === 'move') {
-        addRemotePoint(data.strokeId, data.point);
-      }
-    });
+    socket.on('draw_data', handleDrawData);
     socket.on('canvas_clear', () => clearCanvas(false));
     socket.on('canvas_undo', (data) => redrawStrokes(data.strokes || []));
+    socket.connect();
 
     return () => {
       socket.removeAllListeners();
@@ -162,121 +152,6 @@ function App() {
       .catch(() => setNotice(`Room code: ${room?.roomId || joinCode}`));
   }
 
-  function getCtx() {
-    const c = canvasRef.current;
-    return c?.getContext('2d') || null;
-  }
-
-  function drawStroke(stroke) {
-    const ctx = getCtx();
-    if (!ctx || !stroke) return;
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = stroke.erase ? '#ffffff' : stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.beginPath();
-
-    if (stroke.points?.length) {
-      const p = stroke.points[0];
-      ctx.moveTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-      for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x * ctx.canvas.width, pt.y * ctx.canvas.height);
-      if (stroke.points.length === 1) {
-        ctx.lineTo(stroke.points[0].x * ctx.canvas.width + 0.1, stroke.points[0].y * ctx.canvas.height + 0.1);
-      }
-    }
-
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function addRemotePoint(strokeId, point) {
-    const stroke = canvasStrokes.current.find((s) => s.id === strokeId);
-    const ctx = getCtx();
-    if (!ctx || !stroke) return;
-    const prev = stroke.points[stroke.points.length - 1];
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = stroke.erase ? '#ffffff' : stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.beginPath();
-    ctx.moveTo(prev.x * ctx.canvas.width, prev.y * ctx.canvas.height);
-    ctx.lineTo(point.x * ctx.canvas.width, point.y * ctx.canvas.height);
-    ctx.stroke();
-    ctx.restore();
-    stroke.points.push(point);
-  }
-
-  function redrawStrokes(strokes) {
-    const c = canvasRef.current;
-    if (!c) return;
-    canvasStrokes.current = [...strokes];
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, c.width, c.height);
-    strokes.forEach(drawStroke);
-  }
-
-  function clearCanvas(emit = true) {
-    canvasStrokes.current = [];
-    const c = canvasRef.current;
-    if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
-    if (emit) socket.emit('canvas_clear');
-  }
-
-  function undo() {
-    socket.emit('draw_undo');
-  }
-
-  function pointFromEvent(e) {
-    const c = canvasRef.current;
-    const r = c.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
-      y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
-    };
-  }
-
-  function pointerDown(e) {
-    if (game?.phase !== 'drawing' || game.drawerId !== socket.id) return;
-    const p = pointFromEvent(e);
-    drawing.current = true;
-    lastPoint.current = p;
-    canvasRef.current.setPointerCapture(e.pointerId);
-    const payload = { ...p, color, size: brushSize, erase: eraser };
-    localStroke.current = { ...payload, points: [p] };
-    drawStroke({ ...localStroke.current, points: [p] });
-    socket.emit('draw_start', payload);
-  }
-
-  function pointerMove(e) {
-    if (!drawing.current || game?.drawerId !== socket.id) return;
-    const p = pointFromEvent(e);
-    const ctx = getCtx();
-    if (ctx && lastPoint.current) {
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = eraser ? '#ffffff' : color;
-      ctx.lineWidth = brushSize;
-      ctx.beginPath();
-      ctx.moveTo(lastPoint.current.x * ctx.canvas.width, lastPoint.current.y * ctx.canvas.height);
-      ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-      ctx.stroke();
-      ctx.restore();
-    }
-    lastPoint.current = p;
-    socket.emit('draw_move', p);
-  }
-
-  function pointerUp() {
-    if (!drawing.current) return;
-    drawing.current = false;
-    lastPoint.current = null;
-    localStroke.current = null;
-    socket.emit('draw_end');
-  }
-
   const isDrawer = game?.drawerId === socket.id;
   const isHost = room?.hostId === socket.id;
   const timeLeft = game?.timeLeft ?? 0;
@@ -320,7 +195,6 @@ function App() {
       {screen === 'game' && game && (
         <GameScreen
           game={game}
-          socket={socket}
           input={input}
           setInput={setInput}
           sendMessage={sendMessage}

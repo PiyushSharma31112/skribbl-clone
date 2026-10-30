@@ -81,10 +81,45 @@ Node.js + Express + Socket.IO server
 ```
 
 - The drawer's pointer events are converted to normalized canvas coordinates and sent as `draw_start`, `draw_move`, and `draw_end` events. The server validates that the sender is the current drawer, stores stroke data, and broadcasts `draw_data`; each client renders the received stroke on its canvas.
-- `Game` owns round phase, drawer rotation, word options, countdown, hints, scoring, and game completion. The server is authoritative for word selection, correct guesses, and scores.
+- `Game` in `server/src/models/game.js` owns round phase, drawer rotation, word options, countdown, hints, scoring, and game completion. `Room` and `Player` are in their own model modules. The server is authoritative for word selection, correct guesses, and scores.
 - Socket.IO provides event-based, bidirectional real-time messaging for lobby updates, game state, drawing, guesses, and chat.
 - Guess matching trims surrounding whitespace and compares case-insensitively. A partial match is marked “close” rather than correct; only an exact normalized match earns points.
 - Deployment should use a host with WebSocket support (Render/Railway are recommended in the assignment). A multi-instance deployment needs shared room state and a Socket.IO adapter.
+
+### Server structure
+
+```text
+server/src/
+├── app.js                         # Express, HTTP, Socket.IO setup
+├── server.js                      # Startup and listening port
+├── config/env.js                  # Port and allowed client origins
+├── data/words.js                  # Word categories and choices
+├── models/                        # Player, Room, and Game state
+├── socket/
+│   ├── handlers/                  # Room, game, drawing, and chat events
+│   ├── helpers.js                 # Shared socket and room helpers
+│   └── registerSocketHandlers.js  # Connection event registration
+└── state/rooms.js                 # In-memory room registry
+```
+
+Server environment variables are listed in `server/.env.example`. The server does not load `.env` files itself; configure these variables in the shell or deployment environment.
+
+### Client structure
+
+```text
+client/src/
+├── app/                 # App composition and shared game settings
+├── components/layout/   # Shared application chrome
+├── features/
+│   ├── game/            # Game screen and canvas drawing hook
+│   ├── home/            # Room creation and join screen
+│   └── lobby/           # Room lobby screen
+├── services/socket.js   # Socket.IO client configuration
+├── styles/global.css    # Shared app styling
+└── main.jsx             # React entry point
+```
+
+The app uses screen state rather than a router, and communicates with the backend over Socket.IO. Canvas interaction and stroke rendering live in the game feature hook; there is no separate REST API client or global state library.
 
 ## Socket.IO event map
 
@@ -104,7 +139,7 @@ Node.js + Express + Socket.IO server
 ## Code walkthrough talking points
 
 1. **Stroke capture:** `pointerDown`, `pointerMove`, and `pointerUp` in `client/src/main.jsx` capture pointer events. The browser draws locally for responsiveness and emits normalized coordinates to the server.
-2. **State management:** `Game` in `server/src/index.js` manages phases (`lobby`, `choosing`, `drawing`, `roundEnd`, `gameOver`), turns, timers, and score.
+2. **State management:** `Game` in `server/src/models/game.js` manages phases (`lobby`, `choosing`, `drawing`, `roundEnd`, `gameOver`), turns, timers, and score.
 3. **WebSocket synchronization:** Socket.IO broadcasts the server-accepted stroke to room members; room-scoped events keep unrelated rooms isolated.
 4. **Word matching:** the server trims the guess and uses lower-case exact matching; partial matches receive a “close” response and no points.
 5. **Deployment:** the frontend and backend can be deployed separately. The frontend must be built with `VITE_SERVER_URL` set to the backend URL, and the backend must allow the frontend origin in `CLIENT_ORIGIN`.

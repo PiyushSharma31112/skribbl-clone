@@ -1,9 +1,8 @@
 import React from 'react';
-import { Palette, Pencil, Eraser, Undo2, Trash2, Send, Trophy } from 'lucide-react';
+import { Pencil, Eraser, Undo2, Trash2, Send, Trophy } from 'lucide-react';
 
 export default function GameScreen({
   game,
-  socket,
   input,
   setInput,
   sendMessage,
