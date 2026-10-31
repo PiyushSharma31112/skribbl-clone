@@ -114,8 +114,9 @@ export default function GameScreen({
             </div>
           )}
 
-          <div className="canvas-shell">
+          <div className="canvas-shell canvas-panel">
             <canvas
+              className={`drawing-canvas ${isDrawer && game.phase === 'drawing' ? 'canvas-drawable' : ''}`}
               ref={canvasRef}
               width={900}
               height={480}

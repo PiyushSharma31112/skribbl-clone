@@ -1,6 +1,8 @@
 import { WORDS } from '../data/words.js';
 import { saveCompletedGame } from '../services/gameHistoryService.js';
 
+const WORD_CHOICE_SECONDS = 20;
+
 export default class Game {
   constructor(room) {
     this.room = room;
@@ -13,6 +15,7 @@ export default class Game {
     this.guessedIds = new Set();
     this.timer = null;
     this.startedAt = 0;
+    this.choosingStartedAt = 0;
   }
 
   get players() {
@@ -31,12 +34,17 @@ export default class Game {
   state(forPlayerId) {
     const drawer = this.drawer;
     const isDrawer = drawer?.id === forPlayerId;
-    const remaining =
-      this.phase === 'drawing'
+    const remaining = this.phase === 'drawing'
+      ? Math.max(
+          0,
+          this.room.settings.drawTime -
+            Math.floor((Date.now() - this.startedAt) / 1000),
+        )
+      : this.phase === 'choosing'
         ? Math.max(
             0,
-            this.room.settings.drawTime -
-              Math.floor((Date.now() - this.startedAt) / 1000),
+            WORD_CHOICE_SECONDS -
+              Math.floor((Date.now() - this.choosingStartedAt) / 1000),
           )
         : 0;
     let hint = '';
@@ -116,6 +124,7 @@ export default class Game {
       .sort(() => Math.random() - 0.5)
       .slice(0, this.room.settings.wordCount);
     this.phase = 'choosing';
+    this.choosingStartedAt = Date.now();
     this.room.broadcast('round_start', {
       drawerId: this.drawer?.id,
       drawTime: this.room.settings.drawTime,
@@ -123,9 +132,12 @@ export default class Game {
       totalRounds: this.room.settings.rounds * this.players.length,
     });
     this.broadcastState();
-    this.timer = setTimeout(() => {
-      if (this.phase === 'choosing') this.chooseWord(this.wordOptions[0]);
-    }, 20000);
+    this.timer = setInterval(() => {
+      this.broadcastState();
+      if (Date.now() - this.choosingStartedAt >= WORD_CHOICE_SECONDS * 1000) {
+        this.chooseWord(this.wordOptions[0]);
+      }
+    }, 1000);
   }
 
   chooseWord(word) {
@@ -141,6 +153,7 @@ export default class Game {
     this.word = word;
     this.phase = 'drawing';
     this.startedAt = Date.now();
+    this.choosingStartedAt = 0;
     this.strokes = [];
     this.room.broadcast('word_chosen', {
       drawerId: this.drawer.id,
