@@ -57,7 +57,7 @@ export default function HomeScreen({
           <label className="field-label">YOUR NICKNAME</label>
           <input
             className="text-input"
-            placeholder="e.g. Picasso Jr."
+            placeholder="e.g. Piyush."
             maxLength={18}
             value={name}
             onChange={(e) => setName(e.target.value)}
