@@ -2,13 +2,15 @@
   "name": "skribbl-clone",
   "version": "1.0.0",
   "private": true,
-  "description": "Real-time multiplayer drawing and guessing game assignment",
+  "description": "Real-time multiplayer drawing and guessing game",
   "scripts": {
-    "dev": "concurrently -k \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "npm --prefix server run dev",
-    "dev:client": "npm --prefix client run dev",
-    "build": "npm --prefix client run build",
-    "start": "npm --prefix server start"
+    "dev": "concurrently -k \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start"
   },
-  "devDependencies": {"concurrently": "^9.1.2"}
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
 }

@@ -2,9 +2,11 @@ services:
   - type: web
     name: scribbly-server
     runtime: node
-    rootDir: server
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: CLIENT_ORIGIN
+        sync: false
+      - key: DATABASE_PATH
         sync: false
