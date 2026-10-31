@@ -100,6 +100,7 @@ Run backend validation and persistence tests with `npm --prefix backend test`.
 - `DATABASE_PATH`: SQLite file path; defaults to `backend/data/scribbly.sqlite`.
 
 Vite reads frontend environment values at build time. Keep real `.env` files out of source control.
+For production, set `VITE_API_URL` to the backend API base (ending in `/api`) and `VITE_SERVER_URL` to the backend origin before building. If neither is set, the frontend displays a configuration error instead of sending requests to localhost or the wrong host.
 
 ## REST API
 

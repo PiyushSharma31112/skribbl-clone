@@ -1,9 +1,10 @@
-const apiBaseUrl = (
-  import.meta.env.VITE_API_URL ||
-  `${import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'}/api`
-).replace(/\/+$/, '');
+import { apiBaseUrl } from './config.js';
 
 async function request(path) {
+  if (!apiBaseUrl) {
+    throw new Error('Backend is not configured. Set VITE_API_URL in the frontend environment.');
+  }
+
   const response = await fetch(`${apiBaseUrl}${path}`);
   const data = await response.json();
 

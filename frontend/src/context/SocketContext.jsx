@@ -8,6 +8,8 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (!socket) return undefined;
+
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
 
@@ -21,6 +23,20 @@ export function SocketProvider({ children }) {
       socket.disconnect();
     };
   }, [socket]);
+
+  if (!socket) {
+    return (
+      <main className="app-shell grid min-h-screen place-items-center p-8 text-center">
+        <section role="alert" className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="mb-3 text-xl font-bold">Backend configuration required</h1>
+          <p className="text-sm text-slate-600">
+            Set <code>VITE_API_URL</code> and <code>VITE_SERVER_URL</code> in the
+            frontend deployment environment, then rebuild the site.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <SocketContext.Provider value={{ socket, connected }}>
